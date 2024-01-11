@@ -6,6 +6,7 @@ public class implicit_model : MonoBehaviour
 {
 	float 		t 		= 0.0333f;
 	float 		mass	= 1;
+	Vector3 	g	= new Vector3(0, -9.8f, 0);
 	float		damping	= 0.99f;
 	float 		rho		= 0.995f;
 	float 		spring_k = 8000;
@@ -143,9 +144,19 @@ public class implicit_model : MonoBehaviour
 	void Get_Gradient(Vector3[] X, Vector3[] X_hat, float t, Vector3[] G)
 	{
 		//Momentum and Gravity.
-		
+		for(int i=0; i<X.Length; i++){
+			G[i] = 1.0f / Mathf.Pow(t, 2) * mass * (X[i] - X_hat[i]) - mass * g;
+		}
 		//Spring Force.
-		
+		for(int e=0; e<E.Length/2; e++)
+		{
+			int v0 = E[e*2+0];
+			int v1 = E[e*2+1];
+			
+			Vector3 f = spring_k * (1 - L[e] / (X[v0] - X[v1]).magnitude) * (X[v0] - X[v1]);
+			G[v0] += f;
+			G[v1] -= f;
+		}
 	}
 
     // Update is called once per frame
@@ -158,16 +169,35 @@ public class implicit_model : MonoBehaviour
 		Vector3[] G 		= new Vector3[X.Length];
 
 		//Initial Setup.
+		for (int i=0; i<X.Length; i++)
+		{
+			if(i == 0 || i == 20) continue;
+			// Apply damping to velocity.
+			V[i] *= damping;
+			// Calculate X_hat.
+			X_hat[i] = X[i] + V[i] * t;
+			// Set X to X_hat.
+			X[i] = X_hat[i];
+		}
+
+			
 
 		for(int k=0; k<32; k++)
 		{
 			Get_Gradient(X, X_hat, t, G);
 			
 			//Update X by gradient.
-			
+			for(int i=0; i<X.Length; i++){
+				if(i == 0 || i == 20) continue;
+				X[i] -= 1.0f / (1.0f / Mathf.Pow(t, 2) * mass + 4.0f * spring_k) * G[i];	
+			}
 		}
 
 		//Finishing.
+		for (int i=0; i<X.Length; i++){
+			if(i == 0 || i == 20) continue;
+			V[i] += (X[i] - X_hat[i]) / t;
+		}
 		
 		mesh.vertices = X;
 
