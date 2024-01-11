@@ -8,11 +8,13 @@ public class implicit_model : MonoBehaviour
 	float 		mass	= 1;
 	Vector3 	g	= new Vector3(0, -9.8f, 0);
 	float		damping	= 0.99f;
-	float 		rho		= 0.995f;
+	float 		rho		= 0.995f;  // For Chebychev semi-iteration.
 	float 		spring_k = 8000;
 	int[] 		E;
 	float[] 	L;
 	Vector3[] 	V;
+
+	float radius = 2.7f;
 
     // Start is called before the first frame update
     void Start()
@@ -138,6 +140,23 @@ public class implicit_model : MonoBehaviour
 		
 		//Handle colllision.
 
+		// Get the center of the ball
+		Vector3 center = GameObject.Find ("Sphere").transform.position;
+
+		// Update the velocity and position of cloth vertices
+		for(int i=0; i < V.Length; i++)
+		{
+			// Get the distance between the vertex and the center of the ball
+			float distance = (X[i] - center).magnitude;
+
+			// If the vertex is inside the ball
+			if(distance < radius)
+			{
+				V[i] += center + radius * (X[i] - center) / distance - X[i];
+				X[i] = center + radius * (X[i] - center) / distance;
+			}
+		}
+
 		mesh.vertices = X;
 	}
 
@@ -164,7 +183,7 @@ public class implicit_model : MonoBehaviour
 	{
 		Mesh mesh = GetComponent<MeshFilter> ().mesh;
 		Vector3[] X 		= mesh.vertices;
-		Vector3[] last_X 	= new Vector3[X.Length];
+		Vector3[] last_X 	= new Vector3[X.Length]; // For Chebychev semi-iteration.
 		Vector3[] X_hat 	= new Vector3[X.Length];
 		Vector3[] G 		= new Vector3[X.Length];
 
@@ -179,8 +198,6 @@ public class implicit_model : MonoBehaviour
 			// Set X to X_hat.
 			X[i] = X_hat[i];
 		}
-
-			
 
 		for(int k=0; k<32; k++)
 		{
