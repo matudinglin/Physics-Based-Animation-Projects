@@ -9,6 +9,9 @@ public class PBD_model: MonoBehaviour {
 	float[] 	L;
 	Vector3[] 	V;
 
+	Vector3   g = new Vector3(0, -9.8f, 0);
+
+	float radius = 2.7f;
 
 	// Use this for initialization
 	void Start () 
@@ -131,8 +134,26 @@ public class PBD_model: MonoBehaviour {
 		Mesh mesh = GetComponent<MeshFilter> ().mesh;
 		Vector3[] vertices = mesh.vertices;
 
-		//Apply PBD here.
-		//...
+		Vector3[] sum_x = new Vector3[vertices.Length];
+		int[] sum_n = new int[vertices.Length];
+
+		for(int e=0; e<E.Length/2; e++)
+		{
+			int i = E[e*2+0];
+			int j = E[e*2+1];
+			sum_x[i] += 1.0f / 2 * (vertices[i] + vertices[j] + L[e] * (vertices[i] - vertices[j]) / (vertices[i] - vertices[j]).magnitude);
+			sum_n[i] += 1;
+			sum_x[j] += 1.0f / 2 * (vertices[i] + vertices[j] - L[e] * (vertices[i] - vertices[j]) / (vertices[i] - vertices[j]).magnitude);
+			sum_n[j] += 1;
+		}
+		
+		for(int i=0; i<vertices.Length; i++)
+		{
+			if(i==0 || i==20)	continue;
+			V[i] += 1 / t * ((0.2f * vertices[i] + sum_x[i]) / (0.2f + sum_n[i]) - vertices[i]);
+			vertices[i] = (0.2f * vertices[i] + sum_x[i]) / (0.2f + sum_n[i]);
+		}
+		
 		mesh.vertices = vertices;
 	}
 
@@ -141,8 +162,23 @@ public class PBD_model: MonoBehaviour {
 		Mesh mesh = GetComponent<MeshFilter> ().mesh;
 		Vector3[] X = mesh.vertices;
 		
-		//For every vertex, detect collision and apply impulse if needed.
-		//...
+		// Get the center of the ball
+		Vector3 center = GameObject.Find ("Sphere").transform.position;
+
+		// Update the velocity and position of cloth vertices
+		for(int i=0; i < V.Length; i++)
+		{
+			// Get the distance between the vertex and the center of the ball
+			float distance = (X[i] - center).magnitude;
+
+			// If the vertex is inside the ball
+			if(distance < radius)
+			{
+				V[i] += center + radius * (X[i] - center) / distance - X[i];
+				X[i] = center + radius * (X[i] - center) / distance;
+			}
+		}
+
 		mesh.vertices = X;
 	}
 
@@ -155,9 +191,11 @@ public class PBD_model: MonoBehaviour {
 		for(int i=0; i<X.Length; i++)
 		{
 			if(i==0 || i==20)	continue;
-			//Initial Setup
-			//...
+			V[i] *= damping;
+			V[i] += g * t;
+			X[i] += V[i] * t;
 		}
+	
 		mesh.vertices = X;
 
 		for(int l=0; l<32; l++)
