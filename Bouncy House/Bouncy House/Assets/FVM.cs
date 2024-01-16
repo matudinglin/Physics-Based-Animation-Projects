@@ -20,6 +20,8 @@ public class FVM : MonoBehaviour
 	Vector3[] 	X;
 	int number;				//The number of vertices
 
+	Vector3 	gravity = new Vector3(0, -9.8f, 0);
+
 	Matrix4x4[] inv_Dm;
 
 	//For Laplacian smoothing.
@@ -129,16 +131,101 @@ public class FVM : MonoBehaviour
         V_num = new int[number];
 
 		//TODO: Need to allocate and assign inv_Dm
+		inv_Dm = new Matrix4x4[tet_number];
+		for (int tet = 0; tet < tet_number; tet++) {
+			inv_Dm [tet] = Build_Edge_Matrix (tet).inverse;
+		}
     }
 
     Matrix4x4 Build_Edge_Matrix(int tet)
     {
     	Matrix4x4 ret=Matrix4x4.zero;
     	//TODO: Need to build edge matrix here.
+		// Returns the edge matrix of a tetrahedron.
+		ret [0, 0] = X [Tet [tet * 4 + 1]].x - X [Tet [tet * 4 + 0]].x;
+		ret [1, 0] = X [Tet [tet * 4 + 1]].y - X [Tet [tet * 4 + 0]].y;
+		ret [2, 0] = X [Tet [tet * 4 + 1]].z - X [Tet [tet * 4 + 0]].z;
+		ret [3, 0] = 1;
+
+		ret [0, 1] = X [Tet [tet * 4 + 2]].x - X [Tet [tet * 4 + 0]].x;
+		ret [1, 1] = X [Tet [tet * 4 + 2]].y - X [Tet [tet * 4 + 0]].y;
+		ret [2, 1] = X [Tet [tet * 4 + 2]].z - X [Tet [tet * 4 + 0]].z;
+		ret [3, 1] = 1;
+
+		ret [0, 2] = X [Tet [tet * 4 + 3]].x - X [Tet [tet * 4 + 0]].x;
+		ret [1, 2] = X [Tet [tet * 4 + 3]].y - X [Tet [tet * 4 + 0]].y;
+		ret [2, 2] = X [Tet [tet * 4 + 3]].z - X [Tet [tet * 4 + 0]].z;
+		ret [3, 2] = 1;
+
+		ret [0, 3] = 0;
+		ret [1, 3] = 0;
+		ret [2, 3] = 0;
+		ret [3, 3] = 1;
 
 		return ret;
-    }
+	}
 
+	// Compute trace for matrix4x4
+	float Matrix4x4_Trace(Matrix4x4 a)
+	{
+		float ret = 0;
+		for (int i = 0; i < 3; i++) {
+			ret += a [i, i];
+		}	
+		return ret;
+	}
+
+	// Matrix4x4 add operation
+	Matrix4x4 Matrix4x4_Add(Matrix4x4 a, Matrix4x4 b)
+	{
+		Matrix4x4 ret = Matrix4x4.zero;
+		for (int i = 0; i < 3; i++) {
+			ret [i, 0] = a [i, 0] + b [i, 0];
+			ret [i, 1] = a [i, 1] + b [i, 1];
+			ret [i, 2] = a [i, 2] + b [i, 2];
+		}
+		return ret;
+	}
+
+	// Matrix4x4 subtract operation
+	Matrix4x4 Matrix4x4_Subtract(Matrix4x4 a, Matrix4x4 b)
+	{
+		Matrix4x4 ret = Matrix4x4.zero;
+		for (int i = 0; i < 3; i++) {
+			ret [i, 0] = a [i, 0] - b [i, 0];
+			ret [i, 1] = a [i, 1] - b [i, 1];
+			ret [i, 2] = a [i, 2] - b [i, 2];
+		}
+		return ret;
+	}
+
+	// Laplacian smoothing
+	void laplacianSmoothing()
+	{
+		// Initial V_sum and V_num
+		for (int i = 0; i < number; i++) {
+			V_sum [i] = new Vector3 (0, 0, 0);
+			V_num [i] = 0;
+		}
+
+		// Compute V_sum and V_num
+		for (int tet = 0; tet < tet_number; tet++) {
+			Vector3 sum = V [Tet [tet * 4 + 0]] + V [Tet [tet * 4 + 1]] + V [Tet [tet * 4 + 2]] + V [Tet [tet * 4 + 3]];
+			V_sum [Tet [tet * 4 + 0]] += sum;
+			V_sum [Tet [tet * 4 + 1]] += sum;
+			V_sum [Tet [tet * 4 + 2]] += sum;
+			V_sum [Tet [tet * 4 + 3]] += sum;
+			V_num [Tet [tet * 4 + 0]] += 4;
+			V_num [Tet [tet * 4 + 1]] += 4;
+			V_num [Tet [tet * 4 + 2]] += 4;
+			V_num [Tet [tet * 4 + 3]] += 4;
+		}
+
+		// Compute V
+		for (int i = 0; i < number; i++) {
+			V[i] = 0.9f * V[i] + 0.1f*V_sum[i] / V_num[i];
+		}
+	}
 
     void _Update()
     {
@@ -152,25 +239,52 @@ public class FVM : MonoBehaviour
     	for(int i=0 ;i<number; i++)
     	{
     		//TODO: Add gravity to Force.
+			Force[i] = gravity * mass;
     	}
 
     	for(int tet=0; tet<tet_number; tet++)
     	{
     		//TODO: Deformation Gradient
-    		
+			Matrix4x4 F = Build_Edge_Matrix(tet) * inv_Dm[tet];
     		//TODO: Green Strain
-
-    		//TODO: Second PK Stress
-
-    		//TODO: Elastic Force
-			
+			Matrix4x4 G = Matrix4x4.Scale(new Vector3(0.5f, 0.5f, 0.5f)) * Matrix4x4_Subtract(F.transpose * F, Matrix4x4.identity);
+    		//TODO: Second PK Stress, Elastic Force
+			Matrix4x4 scaler_1 = Matrix4x4.Scale(new Vector3(2f*stiffness_1, 2f*stiffness_1, 2f*stiffness_1));
+			float G_trace = Matrix4x4_Trace(G); 
+			Matrix4x4 scaler_2 = Matrix4x4.Scale(new Vector3(G_trace*stiffness_0, G_trace*stiffness_0, G_trace*stiffness_0));
+			Matrix4x4 S = Matrix4x4_Add(scaler_1 * G, scaler_2 * Matrix4x4.identity);
+			//TODO: Update Force
+			float scale=-1.0f/(inv_Dm[tet].determinant*6);
+			Matrix4x4 temp = F * S * inv_Dm[tet].transpose;
+			Force[Tet[tet*4+0]].x-=scale*(temp[0,0]+temp[0,1]+temp[0,2]);
+			Force[Tet[tet*4+0]].y-=scale*(temp[1,0]+temp[1,1]+temp[1,2]);
+			Force[Tet[tet*4+0]].z-=scale*(temp[2,0]+temp[2,1]+temp[2,2]);
+			Force[Tet[tet*4+1]].x+=scale*temp[0,0];
+			Force[Tet[tet*4+1]].y+=scale*temp[1,0];
+			Force[Tet[tet*4+1]].z+=scale*temp[2,0];
+			Force[Tet[tet*4+2]].x+=scale*temp[0,1];
+			Force[Tet[tet*4+2]].y+=scale*temp[1,1];
+			Force[Tet[tet*4+2]].z+=scale*temp[2,1];
+			Force[Tet[tet*4+3]].x+=scale*temp[0,2];
+			Force[Tet[tet*4+3]].y+=scale*temp[1,2];
+			Force[Tet[tet*4+3]].z+=scale*temp[2,2];
     	}
 
+		laplacianSmoothing();
     	for(int i=0; i<number; i++)
     	{
     		//TODO: Update X and V here.
+			V [i] += (Force [i] * dt / mass) * damp;
+			X [i] += V [i] * dt;
 
     		//TODO: (Particle) collision with floor.
+    		if(X[i].y < -3.0f)
+    		{
+    			V[i].x = 0;
+    			V[i].z = 0;
+    			V[i].y += (-3.0f - X[i].y) / dt;
+    			X[i].y = -3.0f;
+    		}
     	}
     }
 
