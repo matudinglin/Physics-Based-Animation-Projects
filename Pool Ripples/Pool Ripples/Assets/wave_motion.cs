@@ -146,6 +146,15 @@ public class wave_motion : MonoBehaviour
 	{		
 		//Step 1:
 		//TODO: Compute new_h based on the shallow wave model.
+		for (int i=0; i<size; i++)
+		for (int j=0; j<size; j++) 
+		{
+			new_h[i,j]=h[i,j] + damping * (h[i,j] - old_h[i,j]);
+			if(i-1>=0)	new_h[i,j]+=rate*(h[i-1,j]-h[i,j]);
+			if(i+1<size)	new_h[i,j]+=rate*(h[i+1,j]-h[i,j]);
+			if(j-1>=0)	new_h[i,j]+=rate*(h[i,j-1]-h[i,j]);
+			if(j+1<size)	new_h[i,j]+=rate*(h[i,j+1]-h[i,j]);
+		}
 
 		//Step 2: Block->Water coupling
 		//TODO: for block 1, calculate low_h.
@@ -162,6 +171,12 @@ public class wave_motion : MonoBehaviour
 
 		//Step 3
 		//TODO: old_h <- h; h <- new_h;
+		for (int i=0; i<size; i++)
+		for (int j=0; j<size; j++) 
+		{
+			old_h[i,j]=h[i,j];
+			h[i,j]=new_h[i,j];
+		}
 
 		//Step 4: Water->Block coupling.
 		//More TODO here.
@@ -177,10 +192,27 @@ public class wave_motion : MonoBehaviour
 		float[,] h     = new float[size, size];
 
 		//TODO: Load X.y into h.
+		for (int i=0; i<size; i++)
+		for (int j=0; j<size; j++) 
+		{
+			h[i,j]=X[i*size+j].y;
+		}
 
 		if (Input.GetKeyDown ("r")) 
 		{
 			//TODO: Add random water.
+			float r=Random.Range(0.1f,0.2f);
+			int x = Random.Range(0,size);
+			int y = Random.Range(0,size);
+			h[x, y]+=r;
+			// Deduce the same amount (r) from the surrounding columns so the total volume stays the same.
+			r /= 8.0f;
+			for(int i=-1; i<=1; i++)
+			for(int j=-1; j<=1; j++)
+			if(x+i>=0 && y+j>=0 && x+i<size && y+j<size)
+			{
+				h[x+i, y+j]-=r;
+			}
 		}
 	
 		for(int l=0; l<8; l++)
@@ -189,6 +221,13 @@ public class wave_motion : MonoBehaviour
 		}
 
 		//TODO: Store h back into X.y and recalculate normal.
+		for (int i=0; i<size; i++)
+		for (int j=0; j<size; j++) 
+		{
+			X[i*size+j].y=h[i,j];
+		}
+		mesh.vertices  = X;
+		mesh.RecalculateNormals ();
 
 		
 	}
